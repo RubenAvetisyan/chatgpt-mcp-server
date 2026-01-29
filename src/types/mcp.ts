@@ -1,9 +1,10 @@
 import { z } from 'zod';
 
 // JSON-RPC 2.0 Base Types
+// Note: id is optional for notifications (JSON-RPC 2.0 spec)
 export const JsonRpcRequestSchema = z.object({
   jsonrpc: z.literal('2.0'),
-  id: z.union([z.string(), z.number(), z.null()]),
+  id: z.union([z.string(), z.number(), z.null()]).optional(),
   method: z.string(),
   params: z.record(z.unknown()).optional(),
 });
