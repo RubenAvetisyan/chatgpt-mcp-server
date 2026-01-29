@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import type { McpTool, McpToolResult } from '../types/mcp.js';
 import { InvalidParamsError } from '../types/mcp.js';
+import { memoryToolDefinitions, executeMemoryTool } from './memory.js';
 
 // Tool Input Schemas using Zod for validation
 const EchoInputSchema = z.object({
@@ -92,6 +93,8 @@ export const toolDefinitions: McpTool[] = [
       required: ['text'],
     },
   },
+  // Memory tools are added from the memory module
+  ...memoryToolDefinitions,
 ];
 
 // Tool Implementations
@@ -192,8 +195,15 @@ function textStats(args: unknown): McpToolResult {
   };
 }
 
-// Tool Router
-export function executeTool(name: string, args: unknown): McpToolResult {
+// Tool Router (async to support memory tools with Supabase)
+export async function executeTool(name: string, args: unknown): Promise<McpToolResult> {
+  // Check if it's a memory tool first (async)
+  const memoryResult = await executeMemoryTool(name, args);
+  if (memoryResult !== null) {
+    return memoryResult;
+  }
+
+  // Handle built-in synchronous tools
   switch (name) {
     case 'echo':
       return echo(args);

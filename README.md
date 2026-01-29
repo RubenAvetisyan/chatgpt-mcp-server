@@ -18,6 +18,17 @@ A **100% free**, open-source Model Context Protocol (MCP) server that can be con
                                             │  - calculate         │
                                             │  - generate_uuid     │
                                             │  - text_stats        │
+                                            │  - memory_save       │
+                                            │  - memory_search     │
+                                            │  - memory_forget     │
+                                            │  - memory_list       │
+                                            │  - memory_update     │
+                                            └──────────────────────┘
+                                                      │
+                                                      ▼
+                                            ┌──────────────────────┐
+                                            │   Supabase (Free)    │
+                                            │   - memories table   │
                                             └──────────────────────┘
 ```
 
@@ -37,10 +48,14 @@ custom-chatgpt-mcp-server/
 │   ├── functions/
 │   │   ├── mcp.ts          # Main MCP endpoint (JSON-RPC handler)
 │   │   └── health.ts       # Health check endpoint
+│   ├── lib/
+│   │   └── supabase.ts     # Supabase client helper
 │   ├── tools/
-│   │   └── index.ts        # Tool definitions and implementations
+│   │   ├── index.ts        # Tool definitions and router
+│   │   └── memory.ts       # Memory tools (Supabase-backed)
 │   └── types/
-│       └── mcp.ts          # TypeScript types for MCP protocol
+│       ├── mcp.ts          # TypeScript types for MCP protocol
+│       └── memory.ts       # Memory system types
 ├── public/
 │   └── index.html          # Landing page
 ├── package.json
@@ -51,6 +66,8 @@ custom-chatgpt-mcp-server/
 
 ## Available Tools
 
+### Utility Tools
+
 | Tool | Description | Input |
 |------|-------------|-------|
 | `echo` | Returns input text back | `{ text: string }` |
@@ -58,6 +75,18 @@ custom-chatgpt-mcp-server/
 | `calculate` | Basic arithmetic operations | `{ operation: "add"\|"subtract"\|"multiply"\|"divide", a: number, b: number }` |
 | `generate_uuid` | Generates UUID v4 | `{}` |
 | `text_stats` | Text analysis (chars, words, sentences) | `{ text: string }` |
+
+### Memory Tools (Supabase-backed)
+
+| Tool | Description | Input |
+|------|-------------|-------|
+| `memory_save` | Save a memory item for a user | `{ userId, content, type?, tags?, importance?, sessionId? }` |
+| `memory_search` | Search memories by keyword | `{ userId, query, limit?, type?, sessionId? }` |
+| `memory_forget` | Delete memories | `{ userId, id? } or { userId, contentMatch? }` |
+| `memory_list` | List all memories with pagination | `{ userId, type?, limit?, offset? }` |
+| `memory_update` | Update an existing memory | `{ userId, id, content?, type?, tags?, importance? }` |
+
+**Memory Types:** `preference`, `profile`, `task`, `note`, `fact`
 
 ## API Endpoints
 
@@ -385,6 +414,7 @@ netlify deploy --prod
 |---------|------|-------|
 | Netlify Hosting | **$0** | 100GB bandwidth/month |
 | Netlify Functions | **$0** | 125,000 invocations/month |
+| Supabase Database | **$0** | 500MB storage, 2GB bandwidth |
 | GitHub Repository | **$0** | Unlimited public repos |
 | **Total** | **$0** | More than enough for personal use |
 
@@ -440,5 +470,140 @@ MIT License - Free for commercial and personal use.
 All dependencies are open-source and free:
 
 - **zod**: MIT License - Runtime validation
+- **@supabase/supabase-js**: MIT License - Supabase client
 - **@netlify/functions**: MIT License - Netlify Functions types
 - **typescript**: Apache-2.0 License - TypeScript compiler
+
+---
+
+## Supabase Memory System Setup
+
+### 1. Create a Supabase Project
+
+1. Go to https://supabase.com and sign up (free)
+2. Create a new project
+3. Note your **Project URL** and **anon/public key** from Settings → API
+
+### 2. Create the Memories Table
+
+Run this SQL in the Supabase SQL Editor:
+
+```sql
+-- Create memories table for persistent user memory storage
+CREATE TABLE IF NOT EXISTS memories (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id text NOT NULL,
+  session_id text NULL,
+  type text NOT NULL DEFAULT 'note',
+  content text NOT NULL,
+  tags text[] DEFAULT ARRAY[]::text[],
+  importance int DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Create indexes for efficient queries
+CREATE INDEX IF NOT EXISTS idx_memories_user_id ON memories(user_id);
+CREATE INDEX IF NOT EXISTS idx_memories_type ON memories(type);
+CREATE INDEX IF NOT EXISTS idx_memories_created_at ON memories(created_at DESC);
+
+-- Enable Row Level Security (optional but recommended)
+ALTER TABLE memories ENABLE ROW LEVEL SECURITY;
+
+-- Policy: Allow all operations for now (customize for your auth setup)
+CREATE POLICY "Allow all operations" ON memories
+  FOR ALL USING (true) WITH CHECK (true);
+```
+
+### 3. Configure Environment Variables
+
+Set these in Netlify (Site Settings → Environment Variables):
+
+```
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key-here
+```
+
+For local development, create a `.env` file (add to `.gitignore`):
+
+```
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key-here
+```
+
+---
+
+## ChatGPT Memory Usage Guidelines
+
+Use these guidelines in your ChatGPT system/developer prompts to enable memory:
+
+### System Prompt Example
+
+```
+You have access to a persistent memory system via MCP tools. Use it as follows:
+
+**Retrieving Context:**
+- Before answering questions about user preferences or past interactions, call `memory_search` with relevant keywords.
+- Example: memory_search({ userId: "user123", query: "favorite color" })
+
+**Saving Memories:**
+- When the user says "remember this", "don't forget", or expresses stable preferences, call `memory_save`.
+- Save concise, distilled facts—NOT full conversation logs.
+- Use appropriate types: preference, profile, task, note, fact.
+- Example: memory_save({ userId: "user123", content: "Prefers dark mode", type: "preference" })
+
+**Forgetting:**
+- When the user asks to forget something, call `memory_forget`.
+- Example: memory_forget({ userId: "user123", contentMatch: "dark mode" })
+
+**Privacy:**
+- NEVER store passwords, API keys, or highly sensitive personal data.
+- Only store information the user explicitly wants remembered.
+```
+
+### User Identity
+
+The memory system requires a `userId` for all operations. Options:
+
+1. **Single-user setup**: Use a fixed userId like `"default"` or `"user1"`
+2. **Multi-user setup**: Pass a unique identifier per user (from your auth system)
+
+> ⚠️ **Note**: The current implementation does not verify userId ownership. This is suitable for personal use but not for untrusted multi-user environments without additional authentication.
+
+### Example Tool Calls
+
+**Save a preference:**
+```json
+{
+  "name": "memory_save",
+  "arguments": {
+    "userId": "user123",
+    "content": "User prefers concise responses without emojis",
+    "type": "preference",
+    "importance": 5
+  }
+}
+```
+
+**Search for context:**
+```json
+{
+  "name": "memory_search",
+  "arguments": {
+    "userId": "user123",
+    "query": "response style",
+    "limit": 5
+  }
+}
+```
+
+**Forget a memory:**
+```json
+{
+  "name": "memory_forget",
+  "arguments": {
+    "userId": "user123",
+    "contentMatch": "emoji"
+  }
+}
+```

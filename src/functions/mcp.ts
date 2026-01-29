@@ -81,10 +81,10 @@ function handleToolsList(id: string | number | null): JsonRpcResponse {
   return createResponse(id, result);
 }
 
-function handleToolsCall(
+async function handleToolsCall(
   id: string | number | null,
   params: Record<string, unknown> | undefined
-): JsonRpcResponse {
+): Promise<JsonRpcResponse> {
   if (!params || typeof params.name !== 'string') {
     return createErrorResponse(
       id,
@@ -110,7 +110,7 @@ function handleToolsCall(
 
   // Execute tool and handle InvalidParamsError separately from tool execution errors
   try {
-    const result = executeTool(toolParams.name, toolParams.arguments);
+    const result = await executeTool(toolParams.name, toolParams.arguments);
     return createResponse(id, result);
   } catch (error) {
     if (error instanceof InvalidParamsError) {
@@ -215,7 +215,7 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
       response = handleToolsList(request.id);
       break;
     case McpMethods.TOOLS_CALL:
-      response = handleToolsCall(request.id, request.params);
+      response = await handleToolsCall(request.id, request.params);
       break;
     case McpMethods.PING:
       response = handlePing(request.id);
