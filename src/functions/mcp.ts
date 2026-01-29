@@ -18,13 +18,23 @@ const SERVER_INFO = {
 
 const PROTOCOL_VERSION = '2024-11-05';
 
-// CORS Headers for cross-origin requests
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Content-Type': 'application/json',
-};
+// Allowed origins for CORS (ChatGPT domains)
+const ALLOWED_ORIGINS = [
+  'https://chat.openai.com',
+  'https://chatgpt.com',
+];
+
+// Helper: Get CORS headers with dynamic origin
+function getCorsHeaders(origin?: string): Record<string, string> {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Credentials': 'true',
+    'Content-Type': 'application/json',
+  };
+}
 
 // Helper: Create JSON-RPC Response
 function createResponse(id: string | number | null, result: unknown): JsonRpcResponse {
@@ -107,6 +117,9 @@ function handlePing(id: string | number | null): JsonRpcResponse {
 
 // Main Handler
 const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) => {
+  const origin = event.headers['origin'] || event.headers['Origin'];
+  const corsHeaders = getCorsHeaders(origin);
+
   // Handle CORS preflight
   if (event.httpMethod === 'OPTIONS') {
     return {
@@ -141,7 +154,7 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
     };
   }
 
-  // Validate JSON-RPC request
+  // Validate JSON-RPC request structure
   const parseResult = JsonRpcRequestSchema.safeParse(body);
   if (!parseResult.success) {
     return {
@@ -159,6 +172,17 @@ const handler: Handler = async (event: HandlerEvent, _context: HandlerContext) =
   }
 
   const request = parseResult.data;
+
+  // Handle notifications (requests without id) - no response required
+  if (request.id === null || request.id === undefined) {
+    // For notifications like 'notifications/initialized', just acknowledge silently
+    return {
+      statusCode: 204,
+      headers: corsHeaders,
+      body: '',
+    };
+  }
+
   let response: JsonRpcResponse;
 
   // Route to appropriate handler

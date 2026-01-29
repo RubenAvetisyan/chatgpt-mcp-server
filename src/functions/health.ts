@@ -8,6 +8,7 @@ const corsHeaders = {
 };
 
 const handler: Handler = async (_event: HandlerEvent, _context: HandlerContext) => {
+  // Health endpoint keeps permissive CORS for monitoring tools
   const healthStatus = {
     status: 'healthy',
     timestamp: new Date().toISOString(),
