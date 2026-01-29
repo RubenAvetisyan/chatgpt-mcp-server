@@ -1,0 +1,23 @@
+[build]
+  command = "npm run build"
+  functions = "dist/functions"
+  publish = "public"
+
+[functions]
+  node_bundler = "esbuild"
+  included_files = ["src/**/*.json"]
+
+[[redirects]]
+  from = "/mcp"
+  to = "/.netlify/functions/mcp"
+  status = 200
+
+[[redirects]]
+  from = "/health"
+  to = "/.netlify/functions/health"
+  status = 200
+
+[dev]
+  functions = "dist/functions"
+  publish = "public"
+  port = 8888
