@@ -89,6 +89,14 @@ export const ErrorCodes = {
   INTERNAL_ERROR: -32603,
 } as const;
 
+// Custom error class for invalid params (to distinguish from tool execution errors)
+export class InvalidParamsError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidParamsError';
+  }
+}
+
 // MCP Methods
 export const McpMethods = {
   INITIALIZE: 'initialize',

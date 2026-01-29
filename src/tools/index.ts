@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { McpTool, McpToolResult } from '../types/mcp.js';
+import { InvalidParamsError } from '../types/mcp.js';
 
 // Tool Input Schemas using Zod for validation
 const EchoInputSchema = z.object({
@@ -97,10 +98,7 @@ export const toolDefinitions: McpTool[] = [
 function echo(args: unknown): McpToolResult {
   const parsed = EchoInputSchema.safeParse(args);
   if (!parsed.success) {
-    return {
-      content: [{ type: 'text', text: `Invalid input: ${parsed.error.message}` }],
-      isError: true,
-    };
+    throw new InvalidParamsError(parsed.error.issues.map(i => i.message).join(', '));
   }
   return {
     content: [{ type: 'text', text: parsed.data.text }],
@@ -117,10 +115,7 @@ function getCurrentTime(): McpToolResult {
 function calculate(args: unknown): McpToolResult {
   const parsed = CalculateInputSchema.safeParse(args);
   if (!parsed.success) {
-    return {
-      content: [{ type: 'text', text: `Invalid input: ${parsed.error.message}` }],
-      isError: true,
-    };
+    throw new InvalidParamsError(parsed.error.issues.map(i => i.message).join(', '));
   }
 
   const { operation, a, b } = parsed.data;
@@ -172,10 +167,7 @@ function generateUuid(): McpToolResult {
 function textStats(args: unknown): McpToolResult {
   const parsed = TextStatsInputSchema.safeParse(args);
   if (!parsed.success) {
-    return {
-      content: [{ type: 'text', text: `Invalid input: ${parsed.error.message}` }],
-      isError: true,
-    };
+    throw new InvalidParamsError(parsed.error.issues.map(i => i.message).join(', '));
   }
 
   const { text } = parsed.data;

@@ -3,6 +3,7 @@ import {
   JsonRpcRequestSchema,
   ErrorCodes,
   McpMethods,
+  InvalidParamsError,
   type JsonRpcResponse,
   type McpInitializeResult,
   type McpToolsListResult,
@@ -107,8 +108,28 @@ function handleToolsCall(
     );
   }
 
-  const result = executeTool(toolParams.name, toolParams.arguments);
-  return createResponse(id, result);
+  // Execute tool and handle InvalidParamsError separately from tool execution errors
+  try {
+    const result = executeTool(toolParams.name, toolParams.arguments);
+    return createResponse(id, result);
+  } catch (error) {
+    if (error instanceof InvalidParamsError) {
+      // Validation error: return JSON-RPC error
+      return createErrorResponse(
+        id,
+        ErrorCodes.INVALID_PARAMS,
+        'Invalid params',
+        error.message
+      );
+    }
+    // Unexpected error: return internal error
+    return createErrorResponse(
+      id,
+      ErrorCodes.INTERNAL_ERROR,
+      'Internal error',
+      error instanceof Error ? error.message : 'Unknown error'
+    );
+  }
 }
 
 function handlePing(id: string | number | null): JsonRpcResponse {
